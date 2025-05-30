@@ -5,39 +5,89 @@
 
 using std::cout, std::flush, std::this_thread::sleep_for, std::chrono::seconds;
 
-struct VitalThreshold {
-  float min;
-  float max;
-  const char* alertMessage;
+enum VitalStatus {
+    LOW,
+    NEAR_LOW,
+    NORMAL,
+    NEAR_HIGH,
+    HIGH
 };
 
-bool isVitalInRange(float value, const VitalThreshold& threshold) {
-  return value >= threshold.min && value <= threshold.max;
+struct VitalThreshold {
+    float min;
+    float max;
+    float warningTolerancePercent;
+    const char* name;
+    const char* alertMessage;
+    const char* warnLowMessage;
+    const char* warnHighMessage;
+};
+
+VitalStatus evaluateStatus(float value, const VitalThreshold& threshold) {
+    float warnDelta = threshold.max * (threshold.warningTolerancePercent / 100.0f);
+    float nearLow = threshold.min + warnDelta;
+    float nearHigh = threshold.max - warnDelta;
+
+    if (value < threshold.min) return LOW;
+    if (value < nearLow) return NEAR_LOW;
+    if (value <= nearHigh) return NORMAL;
+    if (value <= threshold.max) return NEAR_HIGH;
+    return HIGH;
 }
 
 void showAlert(const char* message) {
-  cout << message << "\n";
-  for (int i = 0; i < 6; i++) {
-    cout << "\r* " << flush;
-    sleep_for(seconds(1));
-    cout << "\r *" << flush;
-    sleep_for(seconds(1));
-  }
+    cout << message << "\n";
+    for (int i = 0; i < 6; ++i) {
+        cout << "\r* " << flush;
+        sleep_for(seconds(1));
+        cout << "\r *" << flush;
+        sleep_for(seconds(1));
+    }
+}
+
+bool checkAndAlert(float value, const VitalThreshold& threshold) {
+    VitalStatus status = evaluateStatus(value, threshold);
+    if (status == LOW || status == HIGH) {
+        showAlert(threshold.alertMessage);
+        return false;
+    }
+     if (status == NEAR_LOW) {
+        cout << threshold.name << ": " << threshold.warnLowMessage << "\n";
+        return true;
+    }
+    if (status == NEAR_HIGH) {
+        cout << threshold.name << ": " << threshold.warnHighMessage << "\n";
+        return true;
+    }
+    // NORMAL
+    return true;
 }
 
 int vitalsOk(float temperature, float pulseRate, float spo2) {
-  const VitalThreshold thresholds[] = {
-    {95, 102, "Temperature is critical!"},
-    {60, 100, "Pulse Rate is out of range!"},
-    {90, 100, "Oxygen Saturation out of range!"}
-  };
-  const float values[] = {temperature, pulseRate, spo2};
+    VitalThreshold tempThresh = {
+        95.0f, 102.0f, 1.5f,
+        "Temperature", "Temperature is critical!",
+        "Warning: Approaching hypothermia",
+        "Warning: Approaching hyperthermia"
+    };
 
-  for (int i = 0; i < 3; ++i) {
-    if (!isVitalInRange(values[i], thresholds[i])) {
-      showAlert(thresholds[i].alertMessage);
-      return 0;
-    }
-  }
-  return 1;
+    VitalThreshold pulseThresh = {
+        60.0f, 100.0f, 1.5f,
+        "Pulse Rate", "Pulse Rate is out of range!",
+        "Warning: Approaching bradycardia",
+        "Warning: Approaching tachycardia"
+    };
+
+    VitalThreshold spo2Thresh = {
+        90.0f, 100.0f, 1.5f,
+        "SPO2", "Oxygen Saturation out of range!",
+        "Warning: Approaching hypoxia",
+        "Warning: Approaching SPO2 ceiling"
+    };
+
+    bool tempOk = checkAndAlert(temperature, tempThresh);
+    bool pulseOk = checkAndAlert(pulseRate, pulseThresh);
+    bool spo2Ok = checkAndAlert(spo2, spo2Thresh);
+
+    return tempOk && pulseOk && spo2Ok;
 }
