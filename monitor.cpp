@@ -45,9 +45,13 @@ void showAlert(const char* message) {
     }
 }
 
+bool isCritical(VitalStatus status) {
+    return status == LOW || status == HIGH;
+}
+
 bool checkAndAlert(float value, const VitalThreshold& threshold) {
     VitalStatus status = evaluateStatus(value, threshold);
-    if (status == LOW || status == HIGH) {
+    if (isCritical(status)) {
         showAlert(threshold.alertMessage);
         return false;
     }
