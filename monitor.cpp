@@ -23,16 +23,30 @@ struct VitalThreshold {
     const char* warnHighMessage;
 };
 
-VitalStatus evaluateStatus(float value, const VitalThreshold& threshold) {
-    float warnDelta = threshold.max * (threshold.warningTolerancePercent / 100.0f);
-    float nearLow = threshold.min + warnDelta;
-    float nearHigh = threshold.max - warnDelta;
+float computeWarningDelta(const VitalThreshold& threshold) {
+    return threshold.max * (threshold.warningTolerancePercent / 100.0f);
+}
 
-    if (value < threshold.min) return LOW;
+VitalStatus determineLowerRange(float value, float min, float nearLow) {
+    if (value < min) return LOW;
     if (value < nearLow) return NEAR_LOW;
+    return NORMAL;
+}
+
+VitalStatus determineUpperRange(float value, float nearHigh, float max) {
     if (value <= nearHigh) return NORMAL;
-    if (value <= threshold.max) return NEAR_HIGH;
+    if (value <= max) return NEAR_HIGH;
     return HIGH;
+}
+
+VitalStatus evaluateStatus(float value, const VitalThreshold& threshold) {
+    float delta = computeWarningDelta(threshold);
+    float nearLow = threshold.min + delta;
+    float nearHigh = threshold.max - delta;
+
+    return value < nearHigh
+           ? determineLowerRange(value, threshold.min, nearLow)
+           : determineUpperRange(value, nearHigh, threshold.max);
 }
 
 void showAlert(const char* message) {
@@ -49,21 +63,21 @@ bool isCritical(VitalStatus status) {
     return status == LOW || status == HIGH;
 }
 
+void showWarning(VitalStatus status, const VitalThreshold& threshold) {
+    if (status == NEAR_LOW) {
+        cout << threshold.name << ": " << threshold.warnLowMessage << "\n";
+    } else if (status == NEAR_HIGH) {
+        cout << threshold.name << ": " << threshold.warnHighMessage << "\n";
+    }
+}
+
 bool checkAndAlert(float value, const VitalThreshold& threshold) {
     VitalStatus status = evaluateStatus(value, threshold);
     if (isCritical(status)) {
         showAlert(threshold.alertMessage);
         return false;
     }
-     if (status == NEAR_LOW) {
-        cout << threshold.name << ": " << threshold.warnLowMessage << "\n";
-        return true;
-    }
-    if (status == NEAR_HIGH) {
-        cout << threshold.name << ": " << threshold.warnHighMessage << "\n";
-        return true;
-    }
-    // NORMAL
+    showWarning(status, threshold);
     return true;
 }
 
